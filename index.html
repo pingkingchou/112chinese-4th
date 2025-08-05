@@ -73,8 +73,8 @@
                     <!-- Questions will be dynamically inserted here -->
                 </div>
                 <div class="mt-10 text-center">
-                    <button type="submit" id="submit-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
-                        系統載入中...
+                    <button type="submit" id="submit-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+                        送出答案
                     </button>
                 </div>
             </form>
@@ -131,7 +131,7 @@
         import { getFirestore, doc, setDoc, getDoc, collection, getDocs, query, where, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- 設定區 ---
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "YOUR_API_KEY", authDomain: "YOUR_AUTH_DOMAIN", projectId: "YOUR_PROJECT_ID" };
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'mandarin-quiz-g4-test3';
         const teacherPassword = "pingking1@";
         
@@ -187,42 +187,24 @@
             }
         ];
 
-        // --- Firebase 初始化 ---
-        let db, auth;
+        let db = null;
+        let auth = null;
         let userId = null;
         let isAuthReady = false;
 
-        try {
-            const app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-            setLogLevel('debug'); 
-        } catch (e) {
-            console.error("Firebase 初始化失敗:", e);
-            db = null; // **FIX**: Ensure db is null on failure
+        if (firebaseConfig) {
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                setLogLevel('debug');
+            } catch (e) {
+                console.error("Firebase 初始化失敗:", e);
+                db = null;
+                auth = null;
+            }
         }
 
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                userId = user.uid;
-                console.log("使用者已登入:", userId);
-            } else {
-                try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
-                } catch (error) {
-                    console.error("匿名或自訂Token登入失敗:", error);
-                }
-            }
-            isAuthReady = true;
-            allDOM.submitBtn.disabled = false;
-            allDOM.submitBtn.textContent = '送出答案';
-        });
-
-        // --- DOM 元素 ---
         const allDOM = {
             quizContainer: document.getElementById('quiz-container'),
             form: document.getElementById('quiz-form'),
@@ -245,17 +227,35 @@
             passwordCancelBtn: document.getElementById('password-cancel-btn'),
         };
 
+        if (auth) {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    console.log("使用者已登入:", userId);
+                } else {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("匿名或自訂Token登入失敗:", error);
+                    }
+                }
+                isAuthReady = true;
+            });
+        }
+
         let userAnswers = {};
         let flatQuestions = [];
 
-        // --- UI Creation & Logic ---
         function initializeQuiz() {
             let questionCounter = 0;
-            allDOM.quizContainer.innerHTML = ''; // 清空容器
+            allDOM.quizContainer.innerHTML = ''; 
 
             questionData.forEach((item) => {
                 if (item.isGroup) {
-                    // 處理題組
                     const groupContainer = document.createElement('div');
                     groupContainer.className = 'p-4 rounded-lg bg-gray-50 mb-4';
                     
@@ -283,19 +283,29 @@
             allDOM.form.addEventListener('submit', submitQuiz);
             allDOM.retryBtn.addEventListener('click', retryQuiz);
             allDOM.downloadBtn.addEventListener('click', generateReportPage);
-            allDOM.teacherLoginBtn.addEventListener('click', () => {
-                allDOM.passwordModal.style.display = 'flex';
-                allDOM.passwordInput.focus();
-            });
-            allDOM.passwordCancelBtn.addEventListener('click', () => {
-                allDOM.passwordModal.style.display = 'none';
-                allDOM.passwordInput.value = '';
-            });
-            allDOM.passwordSubmitBtn.addEventListener('click', handleLogin);
-            allDOM.passwordInput.addEventListener('keyup', (event) => {
-                if (event.key === 'Enter') handleLogin();
-            });
-            allDOM.exportCsvBtn.addEventListener('click', exportToCsv);
+            
+            if (!db) {
+                allDOM.teacherLoginBtn.style.display = 'none';
+                const teacherLoginContainer = document.getElementById('teacher-login-container');
+                if(teacherLoginContainer) teacherLoginContainer.style.display = 'none';
+            } else {
+                allDOM.teacherLoginBtn.addEventListener('click', () => {
+                    allDOM.passwordModal.style.display = 'flex';
+                    allDOM.passwordInput.focus();
+                });
+                allDOM.passwordCancelBtn.addEventListener('click', () => {
+                    allDOM.passwordModal.style.display = 'none';
+                    allDOM.passwordInput.value = '';
+                });
+                allDOM.passwordSubmitBtn.addEventListener('click', handleLogin);
+                allDOM.passwordInput.addEventListener('keyup', (event) => {
+                    if (event.key === 'Enter') handleLogin();
+                });
+                allDOM.exportCsvBtn.addEventListener('click', exportToCsv);
+            }
+
+            allDOM.submitBtn.disabled = false;
+            allDOM.submitBtn.textContent = '送出答案';
         }
 
         function createQuestionElement(item, questionIndex) {
@@ -375,7 +385,6 @@
             const totalQuestions = flatQuestions.length;
             const finalScore = Math.round((score / totalQuestions) * 100);
 
-            // **FIX**: Handle database saving gracefully
             if (db && isAuthReady) {
                 allDOM.dbStatusEl.textContent = '正在儲存作答紀錄...';
                 try {
