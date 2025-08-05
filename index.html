@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>國語科學力測驗</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans TC', sans-serif; line-height: 1.8; }
+        .question-group, .question-sub-group { 
+            border-left: 4px solid transparent; 
+            transition: border-color 0.3s; 
+            padding-left: 1rem;
+            margin-bottom: 2rem;
+        }
+        .correct { border-left-color: #22c55e; background-color: #f0fdf4; }
+        .incorrect { border-left-color: #ef4444; background-color: #fef2f2; }
+        .reading-passage {
+            background-color: #f8fafc;
+            border: 1px solid #e5e7eb;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border-radius: 8px;
+        }
+        .question-sub-group {
+            margin-left: 1rem;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #e5e7eb;
+        }
+        #password-modal, #teacher-panel { display: none; } /* 預設隱藏 */
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div id="password-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm">
+            <h3 class="text-xl font-bold mb-4">教師登入</h3>
+            <p class="text-sm text-gray-600 mb-4">請輸入密碼以查看作答紀錄。</p>
+            <input type="password" id="password-input" class="w-full p-2 border border-gray-300 rounded-lg mb-4" placeholder="請輸入密碼...">
+            <div class="flex justify-end gap-3">
+                <button id="password-cancel-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">取消</button>
+                <button id="password-submit-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">確認</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mx-auto max-w-4xl p-4 sm:p-8">
+        <header class="text-center mb-8 bg-white p-6 rounded-xl shadow-md">
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">國語科學力測驗(三)</h1>
+            <h2 class="text-xl sm:text-2xl font-semibold text-gray-600 mt-2">四年級</h2>
+        </header>
+        
+        <div class="bg-white p-6 sm:p-8 rounded-xl shadow-md">
+            <div id="student-info-container">
+                <h2 class="text-xl font-bold mb-4 border-b pb-2">考生資訊</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="student-class" class="block text-sm font-medium text-gray-700 mb-1">班級</label>
+                        <input type="text" id="student-class" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="student-name" class="block text-sm font-medium text-gray-700 mb-1">姓名</label>
+                        <input type="text" id="student-name" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div id="student-info-error" class="text-red-500 text-sm mt-2 hidden"></div>
+            </div>
+
+            <form id="quiz-form" class="mt-8">
+                <div id="quiz-container" class="space-y-6">
+                    <!-- Questions will be dynamically inserted here -->
+                </div>
+                <div class="mt-10 text-center">
+                    <button type="submit" id="submit-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                        系統載入中...
+                    </button>
+                </div>
+            </form>
+
+            <div id="results" class="hidden mt-8">
+                <h2 class="text-2xl font-bold text-center mb-4">測驗結果</h2>
+                <div id="score" class="text-4xl font-bold text-center text-blue-700 mb-2"></div>
+                <div id="summary" class="text-center text-lg mb-8"></div>
+                <div id="db-status" class="text-center text-sm text-gray-500 mb-6"></div>
+                <div class="flex justify-center items-center gap-4">
+                    <button id="download-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+                        下載錯誤報告
+                    </button>
+                    <button id="retry-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+                        再答一次
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="teacher-login-container" class="text-center mt-12 border-t pt-8">
+            <button id="teacher-login-btn" class="text-blue-600 hover:underline">教師登入</button>
+        </div>
+
+        <div id="teacher-panel" class="hidden mt-8 bg-white p-6 rounded-xl shadow-lg">
+            <div class="flex justify-between items-center mb-4 flex-wrap gap-4">
+                <h2 class="text-2xl font-bold">教師後台 - 四年級國語作答紀錄</h2>
+                <button id="export-csv-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md">
+                    匯出為 Excel (CSV)
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">作答時間</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">班級</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">姓名</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">分數</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- Teacher data will be dynamically inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, getDocs, query, where, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- 設定區 ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "YOUR_API_KEY", authDomain: "YOUR_AUTH_DOMAIN", projectId: "YOUR_PROJECT_ID" };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-mandarin-quiz-g4-112-singlepage';
+        const teacherPassword = "pingking1@";
+        
+        // --- 題目資料 ---
+        const questionData = [
+            { "question": "1. 下列哪一個選項「」中的國字讀音是相同的？", "options": ["① 爸爸的工作是保險「推」銷員/回收場的廢紙箱「堆」積如山", "② 客廳牆壁掛了一「幅」山水畫/若懂得惜「福」就能知足常樂", "③ 「偏」遠地區居民常缺乏物資/山坡上開著漫山「遍」野的花", "④ 這段旅程讓我們「刻」骨銘心/每一個人都應「該」愛護環境"], "answer": 2 },
+            { "question": "2. 校外教學即將到來，大家正在商「量」當天要帶的物品。\n上面句子的「量」字，與下列哪一個選項「」內的字讀音相同？", "options": ["① 弟弟的肺活「量」很好，能在水中持續憋氣一分鐘。", "② 瘦小虛弱的他竟敢向拳王挑戰，真是自不「量」力。", "③ 曉華對於這次期中評「量」的成績，感到十分滿意。", "④ 想不到她竟敢獨自一人去鬼屋探險，真有膽「量」。"], "answer": 3 },
+            { "question": "3. 下列選項「」中的字，哪一組字形是相同的？", "options": ["① 拋在「ㄋㄠˇ」後/自尋煩「ㄋㄠˇ」", "② 「ㄅㄧˋ」球比賽/「ㄅㄧˋ」天白雲", "③ 「ㄐㄩˇ」舉違規/「ㄐㄧㄢˇ」查作業", "④ 「ㄉㄢ」心吊膽/作文「ㄊㄧˊ」目"], "answer": 3 },
+            { "question": "4. 他既然「」定要辭職，就「」對不會接受任何人的慰留。\n請問「」內依序應填入什麼字？", "options": ["① 決/絕", "② 決/決", "③ 絕/絕", "④ 絕/決"], "answer": 1 },
+            { "question": "5. 「望塵莫及」的意思和下列哪一個選項最接近？", "options": ["① 遙遙領先，大幅超前", "② 遠遠落後，無法追上", "③ 內外整潔，一塵不染", "④ 環境髒亂，灰塵滿布"], "answer": 2 },
+            { "question": "6. 「青山綠水」是由形容詞「青、綠」加上名詞「山、水」所組成的詞語。\n請問下列哪一個選項的詞語組成方式與「青山綠水」相同？", "options": ["① 濃眉大眼", "② 翻山越嶺", "③ 明知故犯", "④ 好吃懶做"], "answer": 1 },
+            { "question": "7. 「只有」每天注意飲食，並且持之以恆的運動，「才能」擁有健康的身體。\n上述句子屬於哪一種句型？", "options": ["① 轉折句", "② 條件句", "③ 假設句", "④ 並列句"], "answer": 2 },
+            { "question": "8. 即將有颱風侵襲臺灣，氣象局提醒民眾務必一定做好防颱準備。\n上面的句子應刪除哪一個詞語，才會變得最合理、通順？", "options": ["① 即將", "② 臺灣", "③ 民眾", "④ 一定"], "answer": 4 },
+            { "question": "9. 火車緩緩駛出山洞後□映入眼簾的是藍天□白雲與大海□\n上面句子的□中，按照順序應該填入哪些標點符號？", "options": ["① ，，。", "② ，、。", "③ 、、。", "④ 、，。"], "answer": 3 },
+            { "question": "10. 聽覺摹寫是指將對事物所發出的各種聲音加以描繪。下列哪一個選項運用了聽覺摹寫？", "options": ["① 涼爽的風輕輕拂過我的肌膚。", "② 雨水叮叮咚咚在傘面上跳舞。", "③ 外婆家屋後有一大片綠草地。", "④ 空氣裡飄著淡淡的玫瑰花香。"], "answer": 2 },
+            { "question": "11. 把人以外的動物、物品或現象當成人來敘寫的寫作手法就是擬人法。\n下列哪一個選項沒有運用擬人法？", "options": ["① 迎風搖曳的樹枝正在向早起的人們打招呼。", "② 直挺挺的路燈在深夜裡為晚歸的人們站崗。", "③ 一輛輛汽車在擁擠的高速公路上發出怒吼。", "④ 房間裡安靜得連一根針掉在地上都能聽見。"], "answer": 4 },
+            { "question": "12. 甲：西風帶來微微的涼意\n乙：炎熱的夏天過去了\n丙：也帶來的秋天的消息\n丁：下了幾場小雨\n依照順序重組句子，下列哪一個選項最恰當？", "options": ["① 甲乙丁丙", "② 甲丁乙丙", "③ 乙丙丁甲", "④ 乙丁甲丙"], "answer": 4 },
+            { "question": "13. 從形式來看，上面的文本屬於下列哪一個選項？", "options": ["① 應用文", "② 抒情文", "③ 說明文", "④ 記敘文"], "answer": 1, "passage": "親愛的美華：\n你好。\n這是全班同學送給你的禮物，希望你轉學到新的學校之後，能夠很快的適應新環境、交到新朋友，有空的時候也要回來看看我們。\n祝你\n平安如意\n友王婷婷敬上\n6月30日" },
+            { "question": "14. 漁夫出海前，總是仔細的將有破洞的漁網修補好。\n上述句子中「修補」的「補」，與下列哪一個選項中「補」的意思最接近？", "options": ["① 縫「補」衣裳", "② 「補」充水分", "③ 替「補」上場", "④ 冬令進「補」"], "answer": 1 },
+            { "question": "15. 「冷」字的意思有：感覺溫度低、淡漠、不熱烈、寂靜……。\n下列哪一個選項的「冷」有「寂靜」的意思？", "options": ["① 這家餐廳的服務生待客態度十分「冷」淡，難怪生意不好。", "② 雖然陳老師外表看似「冷」漠，實際上卻是熱情如火的人。", "③ 自從姐姐出嫁、妹妹北上念書，家中頓時「冷」清了許多。", "④ 每次聚會，他總是會說些笑話來活絡氣氛，避免「冷」場。"], "answer": 3 },
+            { "question": "16. 面對突如其來的災難，他感到□，不知如何是好。\n上面句子的□內，最適合填入下列哪一個詞語？", "options": ["① 驚慌失措", "② 驚心動魄", "③ 大驚小怪", "④ 有驚無險"], "answer": 1 },
+            { "question": "17. 下列哪一個選項的「準備」意思與其他三者不同？", "options": ["① 為了明天能一口氣登上玉山，我們已經「準備」好裝備了。", "② 無論春夏秋冬，媽媽每天早起為我「準備」香噴噴的早餐。", "③ 事前若是「準備」充分，事到臨頭就不會感到手忙腳亂了。", "④ 最近身體不太舒服，因此明天的宴會我不「準備」參加了。"], "answer": 4 },
+            { "question": "18. 「信心」、「毅力」、「勇氣」三者具備，則天下沒有做不成的事。\n根據這句話的意思，下列哪一個選項最正確？", "options": ["① 具備「信心」、「毅力」、「勇氣」，就做不成事。", "② 具備「信心」、「毅力」、「勇氣」，就可能成功。", "③ 具備「信心」、「毅力」、「勇氣」，就一定成功。", "④ 具備「信心」、「毅力」、「勇氣」，就事半功倍。"], "answer": 3 },
+            { "question": "19. 手心向下是助人，手心向上是求人；助人快樂，求人痛苦。\n這段話的意思和下列哪一個選項最不接近？", "options": ["① 施比受更有福", "② 助人為快樂之本", "③ 失敗為成功之母", "④ 贈人玫瑰，手有餘香"], "answer": 3 },
+            { "question": "20. 下列哪一個選項最能代表本段文字的大意？", "options": ["① 醋的發明", "② 醋的好處", "③ 醋的研究", "④ 醋的療效"], "answer": 2, "passage": "根據研究發現，我們的日常飲食大部分為酸性食物，而醋能幫助我們身體中的血液與體液維持弱鹼性。此外，醋還能促進腸胃蠕動，預防感冒、心臟病、肝臟病等，更能抑制高血壓及肥胖。日本人還發現，當我們打嗝不止時，只要喝一小杯醋，就可以有效緩解。" },
+            { "question": "21. 下列哪一個選項最能代表本段文字的涵義？", "options": ["① 古蹟是見證歷史的產物，需要好好的維護。", "② 古蹟的門窗上藏有故事，需要用心的閱讀。", "③ 古蹟位在幽暗的巷子，需要用心才能找到。", "④ 古蹟都是古老破舊的房子，要預防它垮下。"], "answer": 1, "passage": "古蹟其實是會說故事的老房子，只要你願意走進撫摸它的門窗，輕聲詢問它的名字，它就會告訴你隱藏在幽暗裡的精采。不過，如果你對它疏於照顧，不為它整修，那老房子可能在一場強風豪雨的吹襲下，嘩啦嘩啦垮下來，從此消失不見。" },
+            {
+                isGroup: true,
+                passage: "我有一個萬能的媽媽，她不但是我的御用廚師，還是我的專屬司機，更是我的心理醫師。\n想吃東西時，我只要跟媽媽說一聲，她那雙靈巧的雙手就可以變出許多美食，不管是蛋包飯、拉麵或披薩，全都難不倒她，每道菜看起來不但美味，嘗起來更是可口。媽媽平常上班十分忙碌，下班後還要處理家裡大大小小的事務，但為了我的健康，即使再忙她也要下廚替我準備營養的餐點。\n媽媽也是我的專屬司機。每天早上七點，她準時用她那臺「小藍」摩托車載我去上學；放學時，她更是提早在校門口等候，以熱切的目光迎接我走出校門。除了上學、放學，上才藝班、生病就醫、採買日常用品……只要我有需要，她不畏風吹雨打，總是把我安全送達目的地，令我十分感動。\n媽媽也是我的心理醫師，有任何心事，我都會找她傾訴，聽聽她的想法與意見。有時我甚至還沒開口，媽媽就已經化身算命師，脫口就猜中我的心思，為我指點迷津，真是「知子莫若母」！每天晚上睡覺前，我喜歡和媽媽「竊竊私語」，因為我和媽媽總有說不完的悄悄話、聊不完的新鮮事。\n我的媽媽不但會做菜，為了我的健康，她學習成為一位「營養師」；我的媽媽不但會騎車接送，為了我的安全，她學習成為一位「氣象預報員」；我的媽媽不但會傾聽心聲，為了我的快樂，她學習成為一位「輔導老師」。我的媽媽不論何時何地，總是幫我解決生活中大大小小的難題。\n我有一個愛我的媽媽，真好！",
+                questions: [
+                    { "question": "22. 文章中提到關於媽媽的角色，下列選項何者錯誤？", "options": ["① 御用廚師", "② 籃球教練", "③ 專屬司機", "④ 心理醫師"], "answer": 2 },
+                    { "question": "23. 文中提到「不管是蛋包飯、拉麵或披薩，全都難不倒她。」這段話的意思為何？", "options": ["① 作者媽媽對於任何餐點的製作皆得心應手。", "② 作者媽媽的拿手菜是蛋包飯、拉麵和披薩。", "③ 作者的媽媽只會製作蛋包飯、拉麵和披薩。", "④ 作者的媽媽是廚師，所以任何餐點都會做。"], "answer": 1 },
+                    { "question": "24. 下列哪一個選項是這篇文章的主要涵義？", "options": ["① 作者的媽媽為了養家做三份工作。", "② 每一個家庭中的媽媽都是萬能的。", "③ 媽媽對孩子的付出是不求回報的。", "④ 媽媽在作者的心中是無所不能的。"], "answer": 4 }
+                ]
+            },
+            {
+                isGroup: true,
+                passage: "「奧林花火運動會又要開始了，這次我們一定要拿冠軍。」\n「好！」彩虹隊長對著大家喊話，隊員們用更大的音量回話。\n「哼！神氣什麼，今年得到最多尖叫聲的一定是陀螺戰鬥隊。」說話的是陀螺戰鬥隊隊長，他正和隊員們頭頂著地快速的旋轉。\n仙女棒小柔興沖沖的拉姐姐到運動場上。\n「姐姐，我們怎麼還不趕快練習呢?運動會就快要到了。」\n「那天我們有其他的任務呀！所以不用上場比賽。」\n小柔聽了以後，用哀怨的語氣說：「那我們不就得不到掌聲和尖叫聲，這是我第一次當上正式隊員……。」\n「雖然沒有掌聲，但是我們會得到另一種快樂和溫暖呵！」\n小柔半信半疑的看著姐姐。\n運動會開始了！參賽隊伍都拿出渾身解數準備贏得眾人的歡呼。\n首先登場的是彩虹隊，他們在漆黑的天空塗上七道不同顏色，像河流般的煙火，讓夜空成為一幅夢幻的水彩畫。\n緊接著是陀螺戰鬥隊，他們用高速旋轉的方式往空中飛去，速度快得眼睛都跟不上了。\n還有煙火散開後，在空中排列出「幸福快樂」字樣的文字特攻隊，更讓所有人都拍紅了手掌。\n「媽媽，我看不到煙火。」\n一個身高只到媽媽腰際的小女孩被黑壓壓的人潮擋住視線，根本看不到美麗的煙火秀。看著小女孩一臉期待的表情，媽媽也無可奈何。\n「來，這枝仙女棒給你玩。」\n小女孩看了媽媽一眼，媽媽笑著點了點頭，便把工作人員手上的仙女棒接了過來。\n小女孩拿著點燃的仙女棒開心的玩著，她發現只要快速揮動仙女棒，就會在眼前留下各種形狀的殘影。\n「媽媽，快來看我表演，這是花朵呵！」\n小柔知道姐姐的意思了，小女孩臉上天真的笑容，讓她深深感受到這確實是很棒的任務。",
+                questions: [
+                    { "question": "25. 下列哪一個是各隊伍在花火運動會上的表演項目？", "options": ["① 仙女棒小隊在夜空中畫一幅水彩畫。", "② 彩虹隊在空中排出繽紛的文字圖樣。", "③ 文字特攻隊快速變出七道不同顏色。", "④ 陀螺戰鬥隊高速旋轉，往天空飛去。"], "answer": 4 },
+                    { "question": "26. 姐姐告訴小柔的「另一種快樂和溫暖」指的是什麼？", "options": ["① 吸引眾人的目光", "② 為別人帶來歡樂", "③ 散發耀眼的光芒", "④ 變出繽紛的圖案"], "answer": 2 },
+                    { "question": "27. 下列哪一個是本文的主旨？", "options": ["① 努力學習才可以得第一。", "② 團隊合作才能發揮力量。", "③ 每個人都有自己的價值。", "④ 要多留意周遭的人事物。"], "answer": 3 }
+                ]
+            },
+            {
+                isGroup: true,
+                passage: "冬天，太陽常常有氣無力，低溫讓人們換上厚重的衣物，陰沉的天氣，也讓許多人心情不免低落。但我印象中的冬天卻是繽紛的，有種暖暖的幸福感……。\n灰濛濛的屋外，狂風呼嘯，我們一家人圍坐餐桌享用晚餐，熱騰騰的火鍋冒著陣陣白煙，裡面裝著許多食材和媽媽滿滿的愛。我們在暖呼呼的屋裡，滿臉通紅的邊吃邊談天，說到興奮時還會忍不住手舞足蹈。就這樣，幸福洋溢整個家裡，屋裡的溫暖，讓我們早忘了屋外的寒冷。\n冬天的太陽，偶爾也會發威。媽媽會趁這難得的機會，吆喝我們三個小蘿蔔頭，將被子和枕頭一一搬到頂樓，讓暖和的陽光發揮殺菌的功效。晾在竹竿、攤在長凳或地上的棉被、枕頭，高高低低的堆滿頂樓，這可是玩躲貓貓的大好機會，我們當然不會放過。我們放肆的在棉被、枕頭所搭建的樂園中玩鬧嬉戲，有時玩累了，我們就躺在被子上休息，我才發現在冬天曬太陽原來這麼享受。晚上睡覺時，蓋著蓬鬆的被子感覺特別舒適，它有太陽的味道，聞起來很幸福。\n在冬夜，姐弟三人窩在被子裡聽媽媽說故事，是最幸福的事。在媽媽溫柔聲音的引領下，我們曾擔心「小紅帽」被貪吃的大野狼吃掉，曾期待王子順利找到那可憐受欺負的「灰姑娘」，還曾咒罵「白雪公主」那壞心的繼母，更曾為「賣火柴的小女孩」飽受冷漠後凍死街頭而感到悲傷不已。\n記憶中的童年，睡前的幸福時光是被一個又一個的童話故事填滿的，床邊的媽媽像像是擁有魔力的仙女，一次次的將冬夜裡的寒冷驅散的無影無蹤。",
+                questions: [
+                    { "question": "28. 依據文章內容，下列哪一個選項不是作者對冬天的感覺？", "options": ["① 寒冷", "② 繽紛", "③ 溫暖", "④ 幸福"], "answer": 1 },
+                    { "question": "29. 文章中提到「冬天的太陽，偶爾也會發威」，指的是什麼意思？", "options": ["① 冬天的太陽有殺菌功效。", "② 冬天的太陽有時會生氣。", "③ 冬天常常會出現大太陽。", "④ 冬天有時也會出大太陽。"], "answer": 4 },
+                    { "question": "30. 這篇文章主要想讓讀者知道什麼事？", "options": ["① 一家人圍坐著吃火鍋，是幸福洋溢的事。", "② 家人的互動與相聚，讓冬天充滿幸福感。", "③ 晒過太陽的被子，讓人聞起來覺得幸福。", "④ 在被子裡聽媽媽說故事，是最幸福的事。"], "answer": 2 }
+                ]
+            }
+        ];
+
+        // --- Firebase 初始化 ---
+        let db, auth;
+        let userId = null;
+        let isAuthReady = false;
+
+        try {
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            setLogLevel('debug'); 
+        } catch (e) {
+            console.error("Firebase 初始化失敗:", e);
+            alert("系統載入失敗，請重新整理頁面。");
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                console.log("使用者已登入:", userId);
+            } else {
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("匿名或自訂Token登入失敗:", error);
+                }
+            }
+            isAuthReady = true;
+            // **FIX**: Enable submit button once auth is ready
+            allDOM.submitBtn.disabled = false;
+            allDOM.submitBtn.textContent = '送出答案';
+        });
+
+        // --- DOM 元素 ---
+        const allDOM = {
+            quizContainer: document.getElementById('quiz-container'),
+            form: document.getElementById('quiz-form'),
+            resultsContainer: document.getElementById('results'),
+            scoreEl: document.getElementById('score'),
+            summaryEl: document.getElementById('summary'),
+            downloadBtn: document.getElementById('download-btn'),
+            retryBtn: document.getElementById('retry-btn'),
+            studentInfoContainer: document.getElementById('student-info-container'),
+            studentInfoError: document.getElementById('student-info-error'),
+            dbStatusEl: document.getElementById('db-status'),
+            teacherLoginBtn: document.getElementById('teacher-login-btn'),
+            teacherPanel: document.getElementById('teacher-panel'),
+            resultsTableBody: document.getElementById('results-table-body'),
+            submitBtn: document.getElementById('submit-btn'),
+            exportCsvBtn: document.getElementById('export-csv-btn'),
+            passwordModal: document.getElementById('password-modal'),
+            passwordInput: document.getElementById('password-input'),
+            passwordSubmitBtn: document.getElementById('password-submit-btn'),
+            passwordCancelBtn: document.getElementById('password-cancel-btn'),
+        };
+
+        let userAnswers = {};
+        let flatQuestions = [];
+
+        // --- UI Creation & Logic ---
+        function initializeQuiz() {
+            let questionCounter = 0;
+            allDOM.quizContainer.innerHTML = ''; // 清空容器
+
+            questionData.forEach((item) => {
+                if (item.isGroup) {
+                    // 處理題組
+                    const groupContainer = document.createElement('div');
+                    groupContainer.className = 'p-4 rounded-lg bg-gray-50 mb-4';
+                    
+                    // 顯示文章
+                    const passageDiv = document.createElement('div');
+                    passageDiv.className = 'reading-passage';
+                    passageDiv.innerHTML = `<p class="whitespace-pre-wrap">${item.passage}</p>`;
+                    groupContainer.appendChild(passageDiv);
+
+                    // 顯示題組中的每個問題
+                    item.questions.forEach(subItem => {
+                        const questionDiv = createQuestionElement(subItem, questionCounter);
+                        questionDiv.classList.add('question-sub-group');
+                        groupContainer.appendChild(questionDiv);
+                        flatQuestions.push(subItem);
+                        questionCounter++;
+                    });
+                    allDOM.quizContainer.appendChild(groupContainer);
+                } else {
+                    // 處理單一問題
+                    const questionDiv = createQuestionElement(item, questionCounter);
+                    allDOM.quizContainer.appendChild(questionDiv);
+                    flatQuestions.push(item);
+                    questionCounter++;
+                }
+            });
+            
+            // 綁定事件監聽器
+            allDOM.form.addEventListener('submit', submitQuiz);
+            allDOM.retryBtn.addEventListener('click', retryQuiz);
+            allDOM.downloadBtn.addEventListener('click', generateReportPage);
+            allDOM.teacherLoginBtn.addEventListener('click', () => {
+                allDOM.passwordModal.style.display = 'flex';
+                allDOM.passwordInput.focus();
+            });
+            allDOM.passwordCancelBtn.addEventListener('click', () => {
+                allDOM.passwordModal.style.display = 'none';
+                allDOM.passwordInput.value = '';
+            });
+            allDOM.passwordSubmitBtn.addEventListener('click', handleLogin);
+            allDOM.passwordInput.addEventListener('keyup', (event) => {
+                if (event.key === 'Enter') handleLogin();
+            });
+            allDOM.exportCsvBtn.addEventListener('click', exportToCsv);
+        }
+
+        function createQuestionElement(item, questionIndex) {
+            const questionGroup = document.createElement('div');
+            questionGroup.className = 'question-group p-4 rounded-lg';
+            questionGroup.id = `question-${questionIndex}`;
+            
+            let content = '';
+            if (item.passage) {
+                 content += `<div class="reading-passage"><p class="whitespace-pre-wrap">${item.passage}</p></div>`;
+            }
+
+            content += `<p class="text-lg font-semibold mb-4">${item.question}</p>`;
+
+            content += `<div class="space-y-2 mt-4">`;
+            item.options.forEach((option, i) => {
+                const optionIndex = i + 1;
+                content += `
+                    <label for="q${questionIndex}_o${optionIndex}" class="flex items-center p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-blue-50 has-[:checked]:bg-blue-100 has-[:checked]:border-blue-400">
+                        <input type="radio" id="q${questionIndex}_o${optionIndex}" name="question${questionIndex}" value="${optionIndex}" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300">
+                        <span class="ml-3 text-gray-700">${option}</span>
+                    </label>
+                `;
+            });
+            content += `</div>`;
+
+            questionGroup.innerHTML = content;
+            return questionGroup;
+        }
+
+        async function submitQuiz(e) {
+            e.preventDefault();
+
+            const studentClassEl = document.getElementById('student-class');
+            const studentNameEl = document.getElementById('student-name');
+            const studentClass = studentClassEl.value.trim();
+            const studentName = studentNameEl.value.trim();
+
+            // **FIX**: Visual feedback for validation instead of alert
+            studentClassEl.classList.remove('border-red-500');
+            studentNameEl.classList.remove('border-red-500');
+            allDOM.studentInfoError.classList.add('hidden');
+
+            if (!studentClass || !studentName) {
+                allDOM.studentInfoError.textContent = '請務必填寫班級和姓名！';
+                allDOM.studentInfoError.classList.remove('hidden');
+                if (!studentClass) studentClassEl.classList.add('border-red-500');
+                if (!studentName) studentNameEl.classList.add('border-red-500');
+                return;
+            }
+            
+            allDOM.submitBtn.disabled = true;
+            allDOM.submitBtn.textContent = '計算中...';
+
+            let score = 0;
+            userAnswers = {};
+            
+            flatQuestions.forEach((item, index) => {
+                const selectedOption = allDOM.form.querySelector(`input[name="question${index}"]:checked`);
+                const questionGroup = document.getElementById(`question-${index}`);
+
+                if (selectedOption) {
+                    const answer = parseInt(selectedOption.value);
+                    userAnswers[index + 1] = answer;
+                    if (answer === item.answer) {
+                        score++;
+                        questionGroup.classList.add('correct');
+                    } else {
+                        questionGroup.classList.add('incorrect');
+                    }
+                } else {
+                    userAnswers[index + 1] = '未作答';
+                    questionGroup.classList.add('incorrect');
+                }
+                questionGroup.querySelectorAll('input[type="radio"]').forEach(radio => radio.disabled = true);
+            });
+
+            const totalQuestions = flatQuestions.length;
+            const finalScore = Math.round((score / totalQuestions) * 100);
+
+            allDOM.dbStatusEl.textContent = '正在儲存作答紀錄...';
+            try {
+                const resultId = auth.currentUser ? auth.currentUser.uid : `${studentClass}-${studentName}-${Date.now()}`;
+                const docRef = doc(db, "artifacts", appId, "public", "data", "results", resultId);
+                await setDoc(docRef, {
+                    studentClass: studentClass,
+                    studentName: studentName,
+                    score: finalScore,
+                    correctCount: score,
+                    totalQuestions: totalQuestions,
+                    answers: userAnswers,
+                    timestamp: new Date()
+                });
+                allDOM.dbStatusEl.textContent = '作答紀錄已成功儲存！';
+                allDOM.dbStatusEl.style.color = 'green';
+            } catch (error) {
+                console.error("Error adding document: ", error);
+                allDOM.dbStatusEl.textContent = '作答紀錄儲存失敗，請檢查網路連線或聯繫管理員。';
+                allDOM.dbStatusEl.style.color = 'red';
+            }
+
+            allDOM.scoreEl.textContent = `${finalScore} 分`;
+            allDOM.summaryEl.textContent = `答對 ${score} 題，共 ${totalQuestions} 題。`;
+
+            allDOM.form.classList.add('hidden');
+            allDOM.resultsContainer.classList.remove('hidden');
+            
+            allDOM.resultsContainer.scrollIntoView({ behavior: 'smooth' });
+        };
+
+        function generateReportPage() {
+            const studentClass = document.getElementById('student-class').value.trim();
+            const studentName = document.getElementById('student-name').value.trim();
+            
+            let incorrectQuestionsHTML = '';
+            
+            flatQuestions.forEach((item, index) => {
+                const userAnswerKey = index + 1;
+                const userAnswer = userAnswers[userAnswerKey];
+                if (userAnswer !== item.answer) {
+                    const questionText = item.question;
+                    const userAnswerText = (userAnswer !== '未作答' && userAnswer) ? item.options[userAnswer - 1] : '未作答';
+                    
+                    let passageHTML = '';
+                    // 找到這個問題所屬的文章
+                    for (const group of questionData) {
+                        if (group.isGroup && group.questions.includes(item)) {
+                            passageHTML = `<div style="background-color:#f3f4f6; padding:10px; border-radius:5px; margin-bottom:10px; white-space: pre-wrap;">${group.passage}</div>`;
+                            break;
+                        }
+                    }
+                    if (!passageHTML && item.passage) {
+                         passageHTML = `<div style="background-color:#f3f4f6; padding:10px; border-radius:5px; margin-bottom:10px; white-space: pre-wrap;">${item.passage}</div>`;
+                    }
+
+
+                    incorrectQuestionsHTML += `
+                        <div style="margin-bottom: 1.5rem; padding-left: 1rem; border-left: 3px solid #ef4444;">
+                            ${passageHTML}
+                            <p style="margin-bottom: 0.5rem;"><strong>題目 ${index + 1}:</strong> ${questionText}</p>
+                            <p>你的答案: ${userAnswerText}</p>
+                        </div>`;
+                }
+            });
+
+            const reportWindow = window.open('', '_blank');
+            reportWindow.document.write(`
+                <html>
+                <head><title>測驗結果報告</title><style>body { font-family: 'Noto Sans TC', sans-serif; padding: 2rem; } h1, h2 { text-align: center; } .info, .score-summary { border-bottom: 2px solid #ccc; padding-bottom: 1rem; margin-bottom: 1rem; }</style></head>
+                <body>
+                    <h1>四年級國語科 測驗報告</h1>
+                    <div class="info"><p><strong>班級:</strong> ${studentClass}</p><p><strong>姓名:</strong> ${studentName}</p></div>
+                    <div class="score-summary"><h2>總成績: ${allDOM.scoreEl.textContent}</h2><p>${allDOM.summaryEl.textContent}</p></div>
+                    <div><h3>錯誤題目列表</h3>${incorrectQuestionsHTML || '<p>恭喜你，全部答對了！</p>'}</div>
+                </body>
+                </html>`);
+            reportWindow.document.close();
+        };
+
+        function retryQuiz() {
+            window.location.reload();
+        };
+
+        async function showTeacherPanel() {
+            allDOM.teacherPanel.style.display = 'block';
+            allDOM.teacherPanel.scrollIntoView({ behavior: 'smooth' });
+            
+            allDOM.resultsTableBody.innerHTML = '<tr><td colspan="4" class="text-center p-4">正在載入紀錄...</td></tr>';
+            
+            try {
+                const resultsCollectionRef = collection(db, "artifacts", appId, "public", "data", "results");
+                const q = query(resultsCollectionRef);
+                const querySnapshot = await getDocs(q);
+                
+                allDOM.resultsTableBody.innerHTML = '';
+                
+                if (querySnapshot.empty) {
+                    allDOM.resultsTableBody.innerHTML = '<tr><td colspan="4" class="text-center p-4">目前沒有任何作答紀錄。</td></tr>';
+                    return;
+                }
+                
+                let results = [];
+                querySnapshot.forEach((doc) => {
+                    results.push(doc.data());
+                });
+
+                results.sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis());
+
+                results.forEach((data) => {
+                    const date = data.timestamp.toDate();
+                    const formattedDate = `${date.getFullYear()}/${(date.getMonth()+1).toString().padStart(2,'0')}/${date.getDate().toString().padStart(2,'0')} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
+                    
+                    const row = `<tr>
+                        <td class="px-6 py-4 whitespace-nowrap">${formattedDate}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">${data.studentClass}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">${data.studentName}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">${data.score}</td>
+                    </tr>`;
+                    allDOM.resultsTableBody.innerHTML += row;
+                });
+
+            } catch (error) {
+                console.error("Error getting documents: ", error);
+                allDOM.resultsTableBody.innerHTML = '<tr><td colspan="4" class="text-center p-4 text-red-500">讀取紀錄失敗，請檢查網路連線或聯繫管理員。</td></tr>';
+            }
+        };
+        
+        const handleLogin = function() {
+            const enteredPassword = allDOM.passwordInput.value;
+
+            if (enteredPassword === teacherPassword) {
+                allDOM.passwordModal.style.display = 'none';
+                allDOM.passwordInput.value = '';
+                showTeacherPanel();
+            } else {
+                alert("密碼錯誤！");
+                allDOM.passwordInput.value = '';
+            }
+        };
+
+        async function exportToCsv() {
+            try {
+                const resultsCollectionRef = collection(db, "artifacts", appId, "public", "data", "results");
+                const q = query(resultsCollectionRef);
+                const querySnapshot = await getDocs(q);
+                if (querySnapshot.empty) {
+                    alert("目前沒有任何作答紀錄可匯出。");
+                    return;
+                }
+
+                const records = [];
+                querySnapshot.forEach((doc) => {
+                    records.push(doc.data());
+                });
+
+                records.sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis());
+                
+                let csvContent = "";
+                const headers = ["作答時間", "班級", "姓名", "分數", "答對題數"];
+                const totalQuestions = flatQuestions.length;
+                for (let i = 1; i <= totalQuestions; i++) {
+                    headers.push(`第${i}題答案`);
+                }
+                csvContent += headers.join(',') + '\r\n';
+
+                records.forEach(record => {
+                    const date = record.timestamp.toDate();
+                    const formattedDate = `${date.getFullYear()}/${(date.getMonth()+1).toString().padStart(2,'0')}/${date.getDate().toString().padStart(2,'0')} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
+                    
+                    let row = [
+                        `"${formattedDate}"`,
+                        `"${record.studentClass}"`,
+                        `"${record.studentName}"`,
+                        record.score,
+                        record.correctCount
+                    ];
+
+                    for (let i = 1; i <= totalQuestions; i++) {
+                        row.push(record.answers[i] || "未作答");
+                    }
+                    csvContent += row.join(',') + '\r\n';
+                });
+
+                const bom = new Uint8Array([0xEF, 0xBB, 0xBF]); 
+                const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                if (link.download !== undefined) { 
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute("href", url);
+                    link.setAttribute("download", "四年級國語作答紀錄.csv");
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+
+            } catch (error) {
+                console.error("無法匯出CSV: ", error);
+                alert("匯出紀錄失敗，請檢查網路連線或聯繫管理員。");
+            }
+        };
+        
+        initializeQuiz();
+    </script>
+</body>
+</html>
