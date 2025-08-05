@@ -132,7 +132,7 @@
 
         // --- 設定區 ---
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "YOUR_API_KEY", authDomain: "YOUR_AUTH_DOMAIN", projectId: "YOUR_PROJECT_ID" };
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-mandarin-quiz-g4-112-singlepage';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'mandarin-quiz-g4-test3';
         const teacherPassword = "pingking1@";
         
         // --- 題目資料 ---
@@ -145,7 +145,7 @@
             { "question": "6. 「青山綠水」是由形容詞「青、綠」加上名詞「山、水」所組成的詞語。\n請問下列哪一個選項的詞語組成方式與「青山綠水」相同？", "options": ["① 濃眉大眼", "② 翻山越嶺", "③ 明知故犯", "④ 好吃懶做"], "answer": 1 },
             { "question": "7. 「只有」每天注意飲食，並且持之以恆的運動，「才能」擁有健康的身體。\n上述句子屬於哪一種句型？", "options": ["① 轉折句", "② 條件句", "③ 假設句", "④ 並列句"], "answer": 2 },
             { "question": "8. 即將有颱風侵襲臺灣，氣象局提醒民眾務必一定做好防颱準備。\n上面的句子應刪除哪一個詞語，才會變得最合理、通順？", "options": ["① 即將", "② 臺灣", "③ 民眾", "④ 一定"], "answer": 4 },
-            { "question": "9. 火車緩緩駛出山洞後□映入眼簾的是藍天□白雲與大海□\n上面句子的□中，按照順序應該填入哪些標點符號？", "options": ["① ，，", "② ，、", "③ 、、", "④ 、，"], "answer": 3 },
+            { "question": "9. 火車緩緩駛出山洞後□映入眼簾的是藍天□白雲與大海□\n上面句子的□中，按照順序應該填入哪些標點符號？", "options": ["① ，，。", "② ，、。", "③ 、、。", "④ 、，。"], "answer": 3 },
             { "question": "10. 聽覺摹寫是指將對事物所發出的各種聲音加以描繪。下列哪一個選項運用了聽覺摹寫？", "options": ["① 涼爽的風輕輕拂過我的肌膚。", "② 雨水叮叮咚咚在傘面上跳舞。", "③ 外婆家屋後有一大片綠草地。", "④ 空氣裡飄著淡淡的玫瑰花香。"], "answer": 2 },
             { "question": "11. 把人以外的動物、物品或現象當成人來敘寫的寫作手法就是擬人法。\n下列哪一個選項沒有運用擬人法？", "options": ["① 迎風搖曳的樹枝正在向早起的人們打招呼。", "② 直挺挺的路燈在深夜裡為晚歸的人們站崗。", "③ 一輛輛汽車在擁擠的高速公路上發出怒吼。", "④ 房間裡安靜得連一根針掉在地上都能聽見。"], "answer": 4 },
             { "question": "12. 甲：西風帶來微微的涼意\n乙：炎熱的夏天過去了\n丙：也帶來的秋天的消息\n丁：下了幾場小雨\n依照順序重組句子，下列哪一個選項最恰當？", "options": ["① 甲乙丁丙", "② 甲丁乙丙", "③ 乙丙丁甲", "④ 乙丁甲丙"], "answer": 4 },
@@ -199,7 +199,7 @@
             setLogLevel('debug'); 
         } catch (e) {
             console.error("Firebase 初始化失敗:", e);
-            alert("系統載入失敗，請重新整理頁面。");
+            db = null; // **FIX**: Ensure db is null on failure
         }
 
         onAuthStateChanged(auth, async (user) => {
@@ -218,7 +218,6 @@
                 }
             }
             isAuthReady = true;
-            // **FIX**: Enable submit button once auth is ready
             allDOM.submitBtn.disabled = false;
             allDOM.submitBtn.textContent = '送出答案';
         });
@@ -260,13 +259,11 @@
                     const groupContainer = document.createElement('div');
                     groupContainer.className = 'p-4 rounded-lg bg-gray-50 mb-4';
                     
-                    // 顯示文章
                     const passageDiv = document.createElement('div');
                     passageDiv.className = 'reading-passage';
                     passageDiv.innerHTML = `<p class="whitespace-pre-wrap">${item.passage}</p>`;
                     groupContainer.appendChild(passageDiv);
 
-                    // 顯示題組中的每個問題
                     item.questions.forEach(subItem => {
                         const questionDiv = createQuestionElement(subItem, questionCounter);
                         questionDiv.classList.add('question-sub-group');
@@ -276,7 +273,6 @@
                     });
                     allDOM.quizContainer.appendChild(groupContainer);
                 } else {
-                    // 處理單一問題
                     const questionDiv = createQuestionElement(item, questionCounter);
                     allDOM.quizContainer.appendChild(questionDiv);
                     flatQuestions.push(item);
@@ -284,7 +280,6 @@
                 }
             });
             
-            // 綁定事件監聽器
             allDOM.form.addEventListener('submit', submitQuiz);
             allDOM.retryBtn.addEventListener('click', retryQuiz);
             allDOM.downloadBtn.addEventListener('click', generateReportPage);
@@ -339,7 +334,6 @@
             const studentClass = studentClassEl.value.trim();
             const studentName = studentNameEl.value.trim();
 
-            // **FIX**: Visual feedback for validation instead of alert
             studentClassEl.classList.remove('border-red-500');
             studentNameEl.classList.remove('border-red-500');
             allDOM.studentInfoError.classList.add('hidden');
@@ -381,25 +375,31 @@
             const totalQuestions = flatQuestions.length;
             const finalScore = Math.round((score / totalQuestions) * 100);
 
-            allDOM.dbStatusEl.textContent = '正在儲存作答紀錄...';
-            try {
-                const resultId = auth.currentUser ? auth.currentUser.uid : `${studentClass}-${studentName}-${Date.now()}`;
-                const docRef = doc(db, "artifacts", appId, "public", "data", "results", resultId);
-                await setDoc(docRef, {
-                    studentClass: studentClass,
-                    studentName: studentName,
-                    score: finalScore,
-                    correctCount: score,
-                    totalQuestions: totalQuestions,
-                    answers: userAnswers,
-                    timestamp: new Date()
-                });
-                allDOM.dbStatusEl.textContent = '作答紀錄已成功儲存！';
-                allDOM.dbStatusEl.style.color = 'green';
-            } catch (error) {
-                console.error("Error adding document: ", error);
-                allDOM.dbStatusEl.textContent = '作答紀錄儲存失敗，請檢查網路連線或聯繫管理員。';
-                allDOM.dbStatusEl.style.color = 'red';
+            // **FIX**: Handle database saving gracefully
+            if (db && isAuthReady) {
+                allDOM.dbStatusEl.textContent = '正在儲存作答紀錄...';
+                try {
+                    const resultId = auth.currentUser ? auth.currentUser.uid : `${studentClass}-${studentName}-${Date.now()}`;
+                    const docRef = doc(db, "artifacts", appId, "public", "data", "results", resultId);
+                    await setDoc(docRef, {
+                        studentClass: studentClass,
+                        studentName: studentName,
+                        score: finalScore,
+                        correctCount: score,
+                        totalQuestions: totalQuestions,
+                        answers: userAnswers,
+                        timestamp: new Date()
+                    });
+                    allDOM.dbStatusEl.textContent = '作答紀錄已成功儲存！';
+                    allDOM.dbStatusEl.style.color = 'green';
+                } catch (error) {
+                    console.error("Error adding document: ", error);
+                    allDOM.dbStatusEl.textContent = '作答紀錄儲存失敗，請檢查網路連線。';
+                    allDOM.dbStatusEl.style.color = 'red';
+                }
+            } else {
+                allDOM.dbStatusEl.textContent = '注意：目前為離線狀態，作答紀錄將不會被儲存。';
+                allDOM.dbStatusEl.style.color = 'orange';
             }
 
             allDOM.scoreEl.textContent = `${finalScore} 分`;
@@ -425,7 +425,6 @@
                     const userAnswerText = (userAnswer !== '未作答' && userAnswer) ? item.options[userAnswer - 1] : '未作答';
                     
                     let passageHTML = '';
-                    // 找到這個問題所屬的文章
                     for (const group of questionData) {
                         if (group.isGroup && group.questions.includes(item)) {
                             passageHTML = `<div style="background-color:#f3f4f6; padding:10px; border-radius:5px; margin-bottom:10px; white-space: pre-wrap;">${group.passage}</div>`;
@@ -470,6 +469,11 @@
             
             allDOM.resultsTableBody.innerHTML = '<tr><td colspan="4" class="text-center p-4">正在載入紀錄...</td></tr>';
             
+            if (!db) {
+                allDOM.resultsTableBody.innerHTML = '<tr><td colspan="4" class="text-center p-4 text-red-500">資料庫連線失敗，無法載入紀錄。</td></tr>';
+                return;
+            }
+
             try {
                 const resultsCollectionRef = collection(db, "artifacts", appId, "public", "data", "results");
                 const q = query(resultsCollectionRef);
@@ -522,6 +526,10 @@
         };
 
         async function exportToCsv() {
+            if (!db) {
+                alert("資料庫連線失敗，無法匯出紀錄。");
+                return;
+            }
             try {
                 const resultsCollectionRef = collection(db, "artifacts", appId, "public", "data", "results");
                 const q = query(resultsCollectionRef);
@@ -587,6 +595,3 @@
     </script>
 </body>
 </html>
-
-
-
